@@ -1,0 +1,130 @@
+# AAAgent 全局配置文件
+# 此文件定义应用的全局行为、默认模型与模式偏好
+
+# 应用基础信息
+app:
+  name: "AAAgent"
+  version: "1.0.0"
+  default_language: "zh-CN"
+  theme: "light"  # light | dark | auto
+
+# 默认模式：启动时进入的模式
+# casual = 休闲模式（新手友好）
+# pro = 专业模式（完整参数）
+default_mode: "casual"
+
+# LLM Provider 配置
+# 支持多个 provider，用户可在界面切换
+providers:
+  openai:
+    enabled: false
+    base_url: "https://api.openai.com/v1"
+    api_key: ""  # 从环境变量或界面输入，不建议硬编码
+    default_model: "gpt-4o"
+    models:
+      - id: "gpt-4o"
+        name: "GPT-4o"
+        capabilities: [streaming, tool_calling, vision]
+      - id: "gpt-4o-mini"
+        name: "GPT-4o Mini"
+        capabilities: [streaming, tool_calling, vision]
+
+  kimi:
+    enabled: true
+    base_url: "https://api.moonshot.cn/v1"
+    api_key: ""
+    default_model: "moonshot-v1-8k"
+    models:
+      - id: "moonshot-v1-8k"
+        name: "Kimi 8K"
+        capabilities: [streaming, tool_calling]
+      - id: "moonshot-v1-32k"
+        name: "Kimi 32K"
+        capabilities: [streaming, tool_calling]
+
+  ollama:
+    enabled: false
+    base_url: "http://localhost:11434"
+    api_key: ""
+    default_model: "llama3"
+    models:
+      - id: "llama3"
+        name: "Llama 3"
+        capabilities: [streaming]
+
+# 模型参数预设（休闲模式用）
+model_presets:
+  - name: "经济"
+    key: "economy"
+    description: "快速响应，成本最低"
+    temperature: 0.7
+    max_tokens: 1024
+  - name: "平衡"
+    key: "balanced"
+    description: "速度与质量兼顾"
+    temperature: 0.7
+    max_tokens: 2048
+  - name: "质量"
+    key: "quality"
+    description: "最详细、最全面的回答"
+    temperature: 0.5
+    max_tokens: 4096
+
+# 工具配置（MCP Servers）
+# 原始技术配置，休闲模式会通过 modes/casual.yaml 进行拟物化映射
+tools:
+  browser:
+    enabled: true
+    mcp_server:
+      name: "browser"
+      command: "npx -y @modelcontextprotocol/server-puppeteer"
+      env: {}
+
+  filesystem:
+    enabled: true
+    mcp_server:
+      name: "filesystem"
+      command: "npx -y @modelcontextprotocol/server-filesystem"
+      env: {}
+      args: ["/path/to/allowed/files"]  # 需配置允许访问的路径
+
+  memory:
+    enabled: false
+    mcp_server:
+      name: "memory"
+      command: "npx -y @modelcontextprotocol/server-memory"
+      env: {}
+
+# 记忆系统配置
+memory:
+  short_term:
+    max_messages: 50  # 保留最近 N 条消息
+  long_term:
+    enabled: true
+    backend: "lancedb"  # lancedb | chroma | sqlite
+    vector_dimension: 1536
+
+# 输入处理配置
+input:
+  max_file_size_mb: 50
+  supported_types:
+    - text/plain
+    - text/markdown
+    - application/pdf
+    - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    - image/png
+    - image/jpeg
+    - audio/mpeg
+  # 文件处理器配置
+  markitdown:
+    enabled: true
+  image:
+    enabled: true
+  audio:
+    enabled: true
+    whisper_model: "whisper-1"  # 仅在使用 OpenAI 时有效
+
+# 开发调试配置
+development:
+  log_level: "info"  # debug | info | warn | error
+  enable_dev_tools: true
