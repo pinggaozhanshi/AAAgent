@@ -1,0 +1,107 @@
+# ============================================
+# AAAgent .gitignore
+# 适用于 TypeScript/React + Tauri 桌面应用项目
+# ============================================
+
+# ======== 依赖 ========
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json  # 团队开发时建议保留，个人项目可忽略
+# yarn.lock      # 同理，团队建议保留
+# pnpm-lock.yaml
+
+# ======== 构建产物 ========
+dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# ======== Tauri / Rust ========
+src-tauri/target/
+src-tauri/Cargo.lock  # 应用项目通常忽略，库项目保留
+src-tauri/gen/
+*.rs.bk
+
+# ======== Electron ========
+# 如果选用 Electron 而非 Tauri
+# release/
+# electron-builder.yml 的本地缓存
+
+# ======== 环境变量 ========
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ======== API 密钥 / 敏感配置 ========
+# 任何包含真实密钥的配置文件（本地覆盖）
+aaagent.config.local.yaml
+config.local.*
+secrets/
+*.pem
+*.key
+
+# ======== 本地数据 / 数据库 ========
+# 向量数据库、SQLite、本地记忆存储
+data/
+*.db
+*.db-journal
+*.lance/
+chroma_data/
+*.vectorstore
+
+# ======== 日志 ========
+logs/
+*.log
+
+# ======== 测试产物 ========
+coverage/
+.nyc_output/
+
+# ======== IDE / 编辑器 ========
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ======== 操作系统 ========
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ======== 缓存 / 临时文件 ========
+.cache/
+.temp/
+tmp/
+temp/
+*.tmp
+*.bak
+
+# ======== 打包产物 ========
+*.dmg
+*.exe
+*.app
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.zip
+*.tar.gz
+
+# ======== 插件开发 ========
+# 本地测试插件
+plugins/local/
+plugins/test/
+

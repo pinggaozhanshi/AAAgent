@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AAAgent</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="side-panel" aria-label="Agent configuration">
+        <div class="brand-row">
+          <div class="robot-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <h1>AAAgent</h1>
+            <p>Phase 0 裸核对话</p>
+          </div>
+        </div>
+
+        <section class="config-section">
+          <h2>模型连接</h2>
+          <label>
+            <span>Provider</span>
+            <select id="provider">
+              <option value="kimi">Kimi</option>
+              <option value="openai">OpenAI</option>
+              <option value="ollama">Ollama</option>
+              <option value="custom">OpenAI 兼容</option>
+            </select>
+          </label>
+          <label>
+            <span>Base URL</span>
+            <input id="baseUrl" type="url" autocomplete="off" />
+          </label>
+          <label>
+            <span>API Key</span>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="仅保存在本机浏览器" />
+          </label>
+          <label>
+            <span>Model</span>
+            <input id="model" type="text" autocomplete="off" />
+          </label>
+        </section>
+
+        <section class="config-section">
+          <h2>机器人设定</h2>
+          <label>
+            <span>系统指令</span>
+            <textarea id="systemPrompt" rows="5">你是 AAAgent，一个面向 AI 新手的友好助手。回答清晰、温和、直接。</textarea>
+          </label>
+          <div class="preset-row" role="group" aria-label="模型预设">
+            <button class="preset is-active" data-preset="economy" type="button">经济</button>
+            <button class="preset" data-preset="balanced" type="button">平衡</button>
+            <button class="preset" data-preset="quality" type="button">质量</button>
+          </div>
+        </section>
+
+        <section class="ability-panel" aria-label="Robot abilities">
+          <h2>能力槽</h2>
+          <div class="ability-grid">
+            <div class="ability is-on"><span>眼</span><strong>对话</strong></div>
+            <div class="ability"><span>手</span><strong>工具</strong></div>
+            <div class="ability"><span>忆</span><strong>记忆</strong></div>
+            <div class="ability"><span>档</span><strong>文件</strong></div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="chat-panel" aria-label="Chat">
+        <header class="chat-header">
+          <div>
+            <h2>对话</h2>
+            <p id="connectionSummary">Kimi · moonshot-v1-8k</p>
+          </div>
+          <button id="clearChat" class="ghost-button" type="button">清空</button>
+        </header>
+
+        <div id="messages" class="messages" aria-live="polite">
+          <article class="message assistant">
+            <div class="avatar">A</div>
+            <div class="bubble">
+              <p>你好，我是 AAAgent。填入 API Key 后，就可以先进行基础对话验证。</p>
+            </div>
+          </article>
+        </div>
+
+        <form id="chatForm" class="composer">
+          <textarea id="userInput" rows="3" placeholder="输入你的问题，按 Ctrl + Enter 发送"></textarea>
+          <div class="composer-actions">
+            <p id="statusText">准备就绪</p>
+            <button id="sendButton" type="submit">发送</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

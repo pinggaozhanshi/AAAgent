@@ -1,0 +1,13 @@
+{
+  "name": "aaagent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AAAgent Phase 0 chat prototype",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node server.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
