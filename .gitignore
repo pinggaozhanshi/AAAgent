@@ -50,6 +50,8 @@ secrets/
 data/
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.lance/
 chroma_data/
 *.vectorstore
@@ -105,3 +107,7 @@ temp/
 plugins/local/
 plugins/test/
 
+
+# ======== Python cache ========
+__pycache__/
+*.py[cod]

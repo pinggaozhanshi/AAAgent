@@ -1,101 +1,81 @@
 <!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AAAgent</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <main class="app-shell">
-      <aside class="side-panel" aria-label="Agent configuration">
-        <div class="brand-row">
-          <div class="robot-mark" aria-hidden="true">
-            <span></span>
-          </div>
-          <div>
-            <h1>AAAgent</h1>
-            <p>Phase 0 裸核对话</p>
-          </div>
-        </div>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AAAgent</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="top-nav">
+    <div class="nav-brand"><span class="brand-mark">A</span><span class="brand-name">AAAgent</span><span class="brand-badge">v0.1.3</span></div>
+    <div class="nav-actions">
+      <div class="mode-switch" role="group" aria-label="应用模式"><button id="casualMode" class="mode-option" type="button">休闲</button><button id="professionalMode" class="mode-option is-active" type="button">专业</button></div>
+      <button class="icon-button" id="usageButton" type="button" title="查看 Token 用量" aria-label="查看 Token 用量">⌁</button>
+      <button class="icon-button" id="settingsButton" type="button" title="设置" aria-label="设置">⚙</button>
+      <button class="icon-button" id="themeToggle" type="button" title="切换主题" aria-label="切换主题">◐</button>
+    </div>
+  </header>
 
-        <section class="config-section">
-          <h2>模型连接</h2>
-          <label>
-            <span>Provider</span>
-            <select id="provider">
-              <option value="kimi">Kimi</option>
-              <option value="openai">OpenAI</option>
-              <option value="ollama">Ollama</option>
-              <option value="custom">OpenAI 兼容</option>
-            </select>
-          </label>
-          <label>
-            <span>Base URL</span>
-            <input id="baseUrl" type="url" autocomplete="off" />
-          </label>
-          <label>
-            <span>API Key</span>
-            <input id="apiKey" type="password" autocomplete="off" placeholder="仅保存在本机浏览器" />
-          </label>
-          <label>
-            <span>Model</span>
-            <input id="model" type="text" autocomplete="off" />
-          </label>
-        </section>
+  <main class="app-shell">
+    <aside class="side-panel" id="sidePanel">
+      <div class="side-heading"><p class="eyebrow">本地工作台</p><h1>我的 Agent</h1><p id="modeDescription">可观察、可控制的专业运行。</p></div>
+      <section class="side-card"><span class="card-label">当前会话</span><strong id="sessionLabel">新会话</strong><button class="text-button" id="newSessionButton" type="button">新建会话</button></section>
+      <section class="side-card professional-only"><span class="card-label">运行状态</span><div class="status-row"><i id="runDot" class="status-dot"></i><span id="runStatus">准备就绪</span></div><p id="runMeta">选择模型方案后开始。</p></section>
+      <section class="side-card professional-only"><span class="card-label">安全边界</span><p>规划与执行仅调用模型文本能力。密钥不会写入 SQLite。</p></section>
+      <div class="side-footer">AAAgent · Local-first</div>
+    </aside>
 
-        <section class="config-section">
-          <h2>机器人设定</h2>
-          <label>
-            <span>系统指令</span>
-            <textarea id="systemPrompt" rows="5">你是 AAAgent，一个面向 AI 新手的友好助手。回答清晰、温和、直接。</textarea>
-          </label>
-          <div class="preset-row" role="group" aria-label="模型预设">
-            <button class="preset is-active" data-preset="economy" type="button">经济</button>
-            <button class="preset" data-preset="balanced" type="button">平衡</button>
-            <button class="preset" data-preset="quality" type="button">质量</button>
-          </div>
-        </section>
-
-        <section class="ability-panel" aria-label="Robot abilities">
-          <h2>能力槽</h2>
-          <div class="ability-grid">
-            <div class="ability is-on"><span>眼</span><strong>对话</strong></div>
-            <div class="ability"><span>手</span><strong>工具</strong></div>
-            <div class="ability"><span>忆</span><strong>记忆</strong></div>
-            <div class="ability"><span>档</span><strong>文件</strong></div>
-          </div>
-        </section>
-      </aside>
-
-      <section class="chat-panel" aria-label="Chat">
-        <header class="chat-header">
-          <div>
-            <h2>对话</h2>
-            <p id="connectionSummary">Kimi · moonshot-v1-8k</p>
-          </div>
-          <button id="clearChat" class="ghost-button" type="button">清空</button>
-        </header>
-
-        <div id="messages" class="messages" aria-live="polite">
-          <article class="message assistant">
-            <div class="avatar">A</div>
-            <div class="bubble">
-              <p>你好，我是 AAAgent。填入 API Key 后，就可以先进行基础对话验证。</p>
-            </div>
-          </article>
-        </div>
-
-        <form id="chatForm" class="composer">
-          <textarea id="userInput" rows="3" placeholder="输入你的问题，按 Ctrl + Enter 发送"></textarea>
-          <div class="composer-actions">
-            <p id="statusText">准备就绪</p>
-            <button id="sendButton" type="submit">发送</button>
-          </div>
+    <section class="chat-main">
+      <div class="chat-toolbar professional-only">
+        <label>规划方案<select id="plannerProfile"></select></label>
+        <label>执行方案<select id="executorProfile"></select></label>
+        <button class="outline-button" id="viewGraphButton" type="button" disabled>查看任务图</button>
+      </div>
+      <div class="messages" id="messages" aria-live="polite">
+        <section class="empty-state" id="emptyState"><span class="empty-symbol">◎</span><h2>开始一个可控的任务</h2><p>在专业模式中，复杂请求会生成可查看的任务图与真实用量记录。</p></section>
+      </div>
+      <div class="composer-area">
+        <div class="composer-info"><span id="connectionSummary">未选择执行方案</span><span id="statusText">准备就绪</span></div>
+        <form class="composer" id="chatForm">
+          <textarea id="userInput" rows="1" placeholder="描述你要完成的任务..." aria-label="输入任务"></textarea>
+          <button class="send-button" id="sendButton" type="submit" aria-label="发送">↑</button>
+          <button class="stop-button" id="stopButton" type="button" aria-label="停止" hidden>■</button>
         </form>
-      </section>
-    </main>
+        <p class="composer-footer">重要信息请自行核实。可在设置中管理本地模型方案。</p>
+      </div>
+    </section>
+  </main>
 
-    <script src="./app.js"></script>
-  </body>
+  <dialog class="panel-dialog" id="settingsDialog">
+    <div class="dialog-header"><div><p class="eyebrow">模型与连接</p><h2>设置中心</h2></div><button class="icon-button" data-close="settingsDialog" type="button" aria-label="关闭">×</button></div>
+    <div class="settings-grid">
+      <section><h3>已保存方案</h3><div id="profileList" class="profile-list"></div></section>
+      <form id="profileForm" class="profile-form"><h3 id="profileFormTitle">新建模型方案</h3><input id="profileId" type="hidden" />
+        <label>方案名称<input id="profileName" required maxlength="80" placeholder="例如：DeepSeek 执行" /></label>
+        <label>方案角色<select id="profileRole"><option value="both">规划与执行</option><option value="planner">仅规划</option><option value="executor">仅执行</option></select></label>
+        <label>Provider<input id="profileProvider" required value="openai" /></label>
+        <label>Base URL<input id="profileBaseUrl" required type="url" placeholder="https://api.example.com/v1" /></label>
+        <label>模型<input id="profileModel" required placeholder="model-name" /></label>
+        <label>API Key<input id="profileApiKey" type="password" placeholder="仅保存到本次本地服务内存" /></label>
+        <div class="two-fields"><label>Temperature<input id="profileTemperature" type="number" min="0" max="2" step="0.1" value="0.7" /></label><label>Max Tokens<input id="profileMaxTokens" type="number" min="1" max="16384" value="2048" /></label></div>
+        <div class="form-actions"><button class="outline-button" id="resetProfileButton" type="button">取消编辑</button><button class="primary-button" type="submit">保存方案</button></div>
+      </form>
+    </div>
+    <p class="dialog-note">方案元数据写入 SQLite；API Key 仅保留在正在运行的本地服务内存中，重启后需重新输入。</p>
+  </dialog>
+
+  <dialog class="panel-dialog graph-dialog" id="graphDialog">
+    <div class="dialog-header"><div><p class="eyebrow">执行记录</p><h2>任务图</h2></div><button class="icon-button" data-close="graphDialog" type="button" aria-label="关闭">×</button></div>
+    <div id="graphSummary" class="graph-summary"></div><div class="graph-workspace"><div class="graph-viewport" id="graphViewport"><div class="graph-canvas" id="taskGraph"><svg id="graphEdges" aria-hidden="true"></svg><div id="graphNodes"></div></div></div><aside class="graph-inspector" id="graphInspector"><p class="eyebrow">任务详情</p><h3>选择一个节点</h3><p>查看任务状态、耗时、依赖和执行结果。</p></aside></div>
+  </dialog>
+
+  <dialog class="panel-dialog usage-dialog" id="usageDialog">
+    <div class="dialog-header"><div><p class="eyebrow">真实用量</p><h2>Token 时间轴</h2></div><button class="icon-button" data-close="usageDialog" type="button" aria-label="关闭">×</button></div>
+    <div class="usage-total"><strong id="usageTotal">0</strong><span>总 Token</span></div><div id="usageChart" class="usage-chart" aria-label="Token 用量图"></div><p class="dialog-note">实心节点为 Provider 返回的 usage；空心节点表示供应商未返回用量，不能当作真实 Token。</p>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
 </html>

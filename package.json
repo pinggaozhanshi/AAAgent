@@ -1,6 +1,6 @@
 {
   "name": "aaagent",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "private": true,
   "description": "AAAgent Phase 0 chat prototype",
   "type": "commonjs",

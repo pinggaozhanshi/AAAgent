@@ -1,220 +1,72 @@
-const providerPresets = {
-  kimi: {
-    baseUrl: 'https://api.moonshot.cn/v1',
-    model: 'moonshot-v1-8k',
-  },
-  openai: {
-    baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-4o-mini',
-  },
-  ollama: {
-    baseUrl: 'http://localhost:11434/v1',
-    model: 'llama3',
-  },
-  custom: {
-    baseUrl: 'https://api.example.com/v1',
-    model: 'model-name',
-  },
-};
+const state = { mode: localStorage.getItem('aaagent.mode') || 'professional', apiBase: '/api', sessionId: localStorage.getItem('aaagent.sessionId') || crypto.randomUUID(), profiles: [], currentRunId: null, graph: null, usage: [], controller: null, loading: false };
+const $ = (selector) => document.querySelector(selector);
+const elements = { messages: $('#messages'), empty: $('#emptyState'), form: $('#chatForm'), input: $('#userInput'), send: $('#sendButton'), stop: $('#stopButton'), status: $('#statusText'), summary: $('#connectionSummary'), planner: $('#plannerProfile'), executor: $('#executorProfile'), graphButton: $('#viewGraphButton'), settings: $('#settingsDialog'), graphDialog: $('#graphDialog'), usageDialog: $('#usageDialog'), profileList: $('#profileList'), profileForm: $('#profileForm'), toast: $('#toast'), runStatus: $('#runStatus'), runMeta: $('#runMeta'), runDot: $('#runDot') };
 
-const presetOptions = {
-  economy: { temperature: 0.7, maxTokens: 1024 },
-  balanced: { temperature: 0.7, maxTokens: 2048 },
-  quality: { temperature: 0.5, maxTokens: 4096 },
-};
+function api(path) { return `${state.apiBase}${path}`; }
+function toast(message) { elements.toast.textContent = message; elements.toast.classList.add('show'); setTimeout(() => elements.toast.classList.remove('show'), 2400); }
+function setMode(mode) { state.mode = mode; localStorage.setItem('aaagent.mode', mode); document.body.classList.toggle('casual', mode === 'casual'); $('#casualMode').classList.toggle('is-active', mode === 'casual'); $('#professionalMode').classList.toggle('is-active', mode === 'professional'); document.querySelectorAll('.professional-only').forEach((node) => node.hidden = mode !== 'professional'); $('#modeDescription').textContent = mode === 'professional' ? '可观察、可控制的专业运行。' : '简洁对话，复杂性在需要时出现。'; }
+function setLoading(loading, label = null) { state.loading = loading; elements.send.hidden = loading; elements.stop.hidden = !loading; elements.input.disabled = loading; elements.status.textContent = label || (loading ? '正在运行...' : '准备就绪'); elements.runStatus.textContent = label || (loading ? '正在运行' : '准备就绪'); elements.runDot.className = `status-dot${loading ? ' running' : ''}`; }
+function setSession(id) { state.sessionId = id; localStorage.setItem('aaagent.sessionId', id); $('#sessionLabel').textContent = id.slice(0, 8); }
+function profileOptions(role) { return state.profiles.filter((profile) => profile.role === role || profile.role === 'both'); }
+function fillSelect(select, role, preferred) { const options = profileOptions(role); select.innerHTML = `<option value="">${role === 'planner' ? '不使用规划模型' : '选择方案'}</option>` + options.map((profile) => `<option value="${profile.id}">${escapeHtml(profile.name)} · ${escapeHtml(profile.model)}</option>`).join(''); if (preferred && options.some((item) => item.id === preferred)) select.value = preferred; }
+function refreshProfileSelectors() { const savedPlanner = localStorage.getItem('aaagent.plannerProfile'); const savedExecutor = localStorage.getItem('aaagent.executorProfile'); fillSelect(elements.planner, 'planner', savedPlanner); fillSelect(elements.executor, 'executor', savedExecutor); updateSummary(); }
+function updateSummary() { const profile = state.profiles.find((item) => item.id === elements.executor.value); elements.summary.textContent = profile ? `${profile.name} · ${profile.model}` : '未选择执行方案'; }
+function escapeHtml(value) { const div = document.createElement('div'); div.textContent = String(value ?? ''); return div.innerHTML; }
+function createMessage(role, content, runId = null, error = false) { elements.empty?.remove(); const article = document.createElement('article'); article.className = `message ${role}`; article.innerHTML = `<div class="avatar">${role === 'user' ? '你' : 'A'}</div><div><div class="bubble${error ? ' error' : ''}"></div>${runId ? '<div class="message-tools"><button class="run-link" type="button">查看任务图</button></div>' : ''}</div>`; article.querySelector('.bubble').textContent = content; if (runId) article.querySelector('.run-link').addEventListener('click', () => openGraph(runId)); elements.messages.appendChild(article); elements.messages.scrollTop = elements.messages.scrollHeight; return article.querySelector('.bubble'); }
 
-const state = {
-  messages: [],
-  preset: 'economy',
-  isLoading: false,
-};
+async function loadProfiles() { try { const response = await fetch(api('/profiles')); if (!response.ok) throw new Error('无法读取模型方案'); state.profiles = await response.json(); renderProfileList(); refreshProfileSelectors(); } catch (error) { toast(error.message); } }
+function renderProfileList() { elements.profileList.innerHTML = state.profiles.length ? state.profiles.map((profile) => `<article class="profile-item"><strong>${escapeHtml(profile.name)}</strong><span>${escapeHtml(profile.provider)} · ${escapeHtml(profile.model)} · ${profile.role}</span><span>${profile.hasSecret ? '密钥已在本次服务中载入' : '重启后需重新输入密钥'}</span><div class="profile-actions"><button type="button" data-edit="${profile.id}">编辑</button><button type="button" data-verify="${profile.id}">测试</button><button type="button" data-archive="${profile.id}">归档</button></div></article>`).join('') : '<p class="dialog-note">尚未保存任何模型方案。</p>'; elements.profileList.querySelectorAll('[data-edit]').forEach((button) => button.addEventListener('click', () => editProfile(button.dataset.edit))); elements.profileList.querySelectorAll('[data-verify]').forEach((button) => button.addEventListener('click', () => verifyProfile(button.dataset.verify))); elements.profileList.querySelectorAll('[data-archive]').forEach((button) => button.addEventListener('click', () => archiveProfile(button.dataset.archive))); }
+function editProfile(id) { const profile = state.profiles.find((item) => item.id === id); if (!profile) return; $('#profileFormTitle').textContent = '编辑模型方案'; $('#profileId').value = profile.id; $('#profileName').value = profile.name; $('#profileRole').value = profile.role; $('#profileProvider').value = profile.provider; $('#profileBaseUrl').value = profile.base_url; $('#profileModel').value = profile.model; $('#profileTemperature').value = profile.parameters.temperature ?? .7; $('#profileMaxTokens').value = profile.parameters.maxTokens ?? 2048; $('#profileApiKey').value = ''; }
+function resetProfileForm() { elements.profileForm.reset(); $('#profileId').value = ''; $('#profileProvider').value = 'openai'; $('#profileTemperature').value = '.7'; $('#profileMaxTokens').value = '2048'; $('#profileFormTitle').textContent = '新建模型方案'; }
+async function saveProfile(event) { event.preventDefault(); const body = { id: $('#profileId').value || undefined, name: $('#profileName').value.trim(), role: $('#profileRole').value, provider: $('#profileProvider').value.trim(), baseUrl: $('#profileBaseUrl').value.trim(), model: $('#profileModel').value.trim(), apiKey: $('#profileApiKey').value.trim() || undefined, temperature: Number($('#profileTemperature').value), maxTokens: Number($('#profileMaxTokens').value) }; try { const response = await fetch(api('/profiles'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const data = await response.json(); if (!response.ok) throw new Error(data.detail || '保存失败'); toast('模型方案已保存'); resetProfileForm(); await loadProfiles(); } catch (error) { toast(error.message); } }
+async function verifyProfile(id) { try { const response = await fetch(api(`/profiles/${id}/verify`), { method: 'POST' }); const data = await response.json(); if (!response.ok) throw new Error(data.detail || '连接失败'); toast(`连接正常：${data.reply || 'OK'}`); await loadProfiles(); } catch (error) { toast(error.message); } }
+async function archiveProfile(id) { if (!confirm('归档此方案？历史运行仍保留快照。')) return; await fetch(api(`/profiles/${id}`), { method: 'DELETE' }); await loadProfiles(); }
 
-const elements = {
-  provider: document.querySelector('#provider'),
-  baseUrl: document.querySelector('#baseUrl'),
-  apiKey: document.querySelector('#apiKey'),
-  model: document.querySelector('#model'),
-  systemPrompt: document.querySelector('#systemPrompt'),
-  connectionSummary: document.querySelector('#connectionSummary'),
-  messages: document.querySelector('#messages'),
-  chatForm: document.querySelector('#chatForm'),
-  userInput: document.querySelector('#userInput'),
-  sendButton: document.querySelector('#sendButton'),
-  statusText: document.querySelector('#statusText'),
-  clearChat: document.querySelector('#clearChat'),
-  presets: Array.from(document.querySelectorAll('.preset')),
-};
-
-function loadSettings() {
-  const saved = JSON.parse(localStorage.getItem('aaagent.settings') || '{}');
-  const provider = saved.provider || 'kimi';
-  const preset = providerPresets[provider] || providerPresets.kimi;
-
-  elements.provider.value = provider;
-  elements.baseUrl.value = saved.baseUrl || preset.baseUrl;
-  elements.apiKey.value = saved.apiKey || '';
-  elements.model.value = saved.model || preset.model;
-  elements.systemPrompt.value = saved.systemPrompt || elements.systemPrompt.value;
-  state.preset = saved.preset || 'economy';
-  updatePresetButtons();
-  updateSummary();
+async function startRun(prompt) { const executorProfileId = elements.executor.value; if (!executorProfileId) { $('#settingsDialog').showModal(); toast('请先在设置中保存并选择执行方案'); return; } const body = { prompt, sessionId: state.sessionId, executorProfileId, plannerProfileId: state.mode === 'professional' ? elements.planner.value || null : null, mode: state.mode }; setLoading(true, '正在创建运行...'); const bubble = createMessage('assistant', ''); let finalText = ''; try { state.controller = new AbortController(); const response = await fetch(api('/runs/stream'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: state.controller.signal }); if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.detail || '运行启动失败'); } await readEvents(response, (data) => { if (data.type === 'run') { state.currentRunId = data.runId; elements.graphButton.disabled = false; setSession(data.sessionId); elements.runMeta.textContent = `运行 ${data.runId.slice(0, 8)}`; } if (data.type === 'graph') { state.graph = data; renderGraph(); } if (data.type === 'task') { if (state.graph) { const task = state.graph.tasks.find((item) => item.id === data.taskId); if (task) Object.assign(task, { status: data.status, output_summary: data.summary || task.output_summary, error_summary: data.error || task.error_summary }); renderGraph(); } setLoading(true, data.status === 'completed' ? '任务完成，继续调度...' : `任务：${data.title || data.status}`); } if (data.type === 'usage') { state.usage.push(data); renderUsage(); } if (data.type === 'chunk') { finalText += data.content; bubble.textContent = finalText; elements.messages.scrollTop = elements.messages.scrollHeight; } if (data.type === 'error') { bubble.classList.add('error'); bubble.textContent = data.error; elements.runDot.className = 'status-dot error'; } if (data.type === 'done') { if (!finalText && data.interrupted) bubble.textContent = '运行已停止。'; } }); if (finalText) createRunLink(bubble, state.currentRunId); } catch (error) { bubble.classList.add('error'); bubble.textContent = error.name === 'AbortError' ? '请求已停止。' : error.message; elements.runDot.className = 'status-dot error'; } finally { state.controller = null; setLoading(false); } }
+async function readEvents(response, onEvent) { const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ''; while (true) { const { done, value } = await reader.read(); if (done) return; buffer += decoder.decode(value, { stream: true }); const lines = buffer.split('\n'); buffer = lines.pop() || ''; for (const line of lines) { if (!line.startsWith('data: ')) continue; try { onEvent(JSON.parse(line.slice(6))); } catch (_) {} } } }
+function createRunLink(bubble, runId) { const tools = document.createElement('div'); tools.className = 'message-tools'; const button = document.createElement('button'); button.className = 'run-link'; button.type = 'button'; button.textContent = '查看任务图'; button.addEventListener('click', () => openGraph(runId)); tools.append(button); bubble.parentElement.append(tools); }
+async function openGraph(runId = state.currentRunId) { if (!runId) return toast('当前会话尚无任务图'); try { const response = await fetch(api(`/runs/${runId}/graph`)); if (!response.ok) throw new Error('任务图尚未生成'); state.graph = await response.json(); renderGraph(); elements.graphDialog.showModal(); } catch (error) { toast(error.message); } }
+function graphStatusLabel(status) {
+  return ({ planned: '未开始', ready: '已就绪', running: '进行中', completed: '已完成', failed: '失败', blocked: '被阻塞', cancelled: '已取消' })[status] || status;
 }
-
-function saveSettings() {
-  localStorage.setItem(
-    'aaagent.settings',
-    JSON.stringify({
-      provider: elements.provider.value,
-      baseUrl: elements.baseUrl.value.trim(),
-      apiKey: elements.apiKey.value.trim(),
-      model: elements.model.value.trim(),
-      systemPrompt: elements.systemPrompt.value,
-      preset: state.preset,
-    }),
-  );
+function graphVisualData() {
+  const taskById = new Map(state.graph.tasks.map((task) => [task.id, task]));
+  const visual = state.graph.visual || { nodes: [], edges: [] };
+  const nodes = visual.nodes.map((node) => ({ ...node, ...taskById.get(node.id), status: taskById.get(node.id)?.status || node.status }));
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const edges = visual.edges.map((edge) => {
+    const source = nodeById.get(edge.source); const target = nodeById.get(edge.target);
+    const stateName = source?.status === 'completed' ? 'complete' : target?.status === 'running' ? 'active' : 'pending';
+    return { ...edge, state: stateName, sourceNode: source, targetNode: target };
+  }).filter((edge) => edge.sourceNode && edge.targetNode);
+  return { nodes, edges, width: visual.width || 760, height: visual.height || 360 };
 }
-
-function updateSummary() {
-  const providerText = elements.provider.options[elements.provider.selectedIndex].text;
-  elements.connectionSummary.textContent = `${providerText} · ${elements.model.value || '未选择模型'}`;
+function selectGraphTask(taskId) {
+  state.selectedTaskId = taskId;
+  renderGraph();
 }
-
-function updatePresetButtons() {
-  elements.presets.forEach((button) => {
-    button.classList.toggle('is-active', button.dataset.preset === state.preset);
-  });
+function renderGraph() {
+  if (!state.graph) return;
+  const data = graphVisualData();
+  $('#graphSummary').textContent = `目标：${state.graph.graph.goal} · ${data.nodes.length} 个任务 · 箭头表示依赖方向`;
+  const canvas = $('#taskGraph'); const edgesSvg = $('#graphEdges'); const nodesLayer = $('#graphNodes');
+  canvas.style.width = `${data.width}px`; canvas.style.height = `${data.height}px`;
+  edgesSvg.setAttribute('viewBox', `0 0 ${data.width} ${data.height}`); edgesSvg.setAttribute('width', data.width); edgesSvg.setAttribute('height', data.height);
+  const definitions = `<defs><marker id="arrow-pending" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9" fill="none" stroke="currentColor"/></marker><marker id="arrow-solid" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="currentColor"/></marker></defs>`;
+  edgesSvg.innerHTML = definitions + data.edges.map((edge) => { const source = edge.sourceNode; const target = edge.targetNode; const startX = source.x + source.width; const startY = source.y + source.height / 2; const endX = target.x; const endY = target.y + target.height / 2; const bend = Math.max(46, (endX - startX) * .45); return `<path class="graph-edge ${edge.state}" d="M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}" marker-end="url(#arrow-${edge.state === 'complete' ? 'solid' : 'pending'})"></path>`; }).join('');
+  nodesLayer.innerHTML = data.nodes.map((task) => `<button class="graph-node ${task.status}${state.selectedTaskId === task.id ? ' selected' : ''}" type="button" data-task-id="${task.id}" style="left:${task.x}px;top:${task.y}px;width:${task.width}px;height:${task.height}px"><span class="node-state">${graphStatusLabel(task.status)}</span><strong>${escapeHtml(task.title)}</strong><small>${task.duration_ms ? `${task.duration_ms} ms` : task.status === 'running' ? '正在处理' : '等待调度'}</small><i></i></button>`).join('');
+  nodesLayer.querySelectorAll('[data-task-id]').forEach((node) => node.addEventListener('click', () => selectGraphTask(node.dataset.taskId)));
+  const selected = data.nodes.find((node) => node.id === state.selectedTaskId) || data.nodes[0];
+  const inspector = $('#graphInspector');
+  if (!selected) { inspector.innerHTML = '<p class="eyebrow">任务详情</p><h3>暂无任务</h3>'; return; }
+  const dependencies = state.graph.dependencies.filter((edge) => edge.task_id === selected.id).map((edge) => data.nodes.find((node) => node.id === edge.prerequisite_task_id)?.title).filter(Boolean);
+  inspector.innerHTML = `<p class="eyebrow">${graphStatusLabel(selected.status)}</p><h3>${escapeHtml(selected.title)}</h3><dl><dt>耗时</dt><dd>${selected.duration_ms ? `${selected.duration_ms} ms` : '尚未完成'}</dd><dt>前置任务</dt><dd>${dependencies.length ? dependencies.map(escapeHtml).join('、') : '无'}</dd><dt>验收标准</dt><dd>${(selected.acceptanceCriteria || []).map(escapeHtml).join('；') || '未提供'}</dd></dl><p class="inspector-output">${escapeHtml(selected.output_summary || selected.error_summary || selected.instruction || '等待任务开始。')}</p>`;
 }
+function renderUsage() { const records = state.usage; const total = records.reduce((sum, item) => sum + (item.total_tokens || 0), 0); $('#usageTotal').textContent = total.toLocaleString(); const maximum = Math.max(1, ...records.map((item) => item.total_tokens || 1)); $('#usageChart').innerHTML = records.map((item) => { const reported = Number.isFinite(item.total_tokens); const amount = reported ? item.total_tokens : 0; const height = reported ? Math.max(34, Math.round(amount / maximum * 180)) : 34; const estimated = !reported || item.usage_source === 'estimated'; return `<button class="usage-point${estimated ? ' estimated' : ''}" type="button" style="height:${height}px" title="${escapeHtml(item.model)} · ${reported ? item.total_tokens : '未返回'} Token · ${item.latency_ms ?? '-'} ms"><span>${reported ? amount : '—'}</span></button>`; }).join('') || '<p class="dialog-note">运行完成后会显示 Provider 返回的 Token 用量。</p>'; }
+async function openUsage() { if (state.currentRunId) { const response = await fetch(api(`/runs/${state.currentRunId}/usage`)); if (response.ok) state.usage = (await response.json()).records; } renderUsage(); elements.usageDialog.showModal(); }
+async function stopRun() { if (state.currentRunId) await fetch(api(`/runs/${state.currentRunId}/cancel`), { method: 'POST' }); state.controller?.abort(); setLoading(false, '已请求停止'); }
 
-function setLoading(isLoading) {
-  state.isLoading = isLoading;
-  elements.sendButton.disabled = isLoading;
-  elements.userInput.disabled = isLoading;
-  elements.statusText.textContent = isLoading ? '正在思考...' : '准备就绪';
-}
+function bind() { $('#professionalMode').addEventListener('click', () => setMode('professional')); $('#casualMode').addEventListener('click', () => setMode('casual')); $('#settingsButton').addEventListener('click', () => elements.settings.showModal()); $('#usageButton').addEventListener('click', openUsage); elements.graphButton.addEventListener('click', () => openGraph()); document.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => document.getElementById(button.dataset.close).close())); $('#themeToggle').addEventListener('click', () => { const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = next; localStorage.setItem('aaagent.theme', next); }); $('#newSessionButton').addEventListener('click', () => { setSession(crypto.randomUUID()); state.currentRunId = null; state.graph = null; state.usage = []; elements.messages.innerHTML = '<section class="empty-state" id="emptyState"><span class="empty-symbol">◎</span><h2>新会话已创建</h2><p>描述一个目标，Agent 会开始工作。</p></section>'; elements.graphButton.disabled = true; }); elements.planner.addEventListener('change', () => localStorage.setItem('aaagent.plannerProfile', elements.planner.value)); elements.executor.addEventListener('change', () => { localStorage.setItem('aaagent.executorProfile', elements.executor.value); updateSummary(); }); elements.profileForm.addEventListener('submit', saveProfile); $('#resetProfileButton').addEventListener('click', resetProfileForm); elements.form.addEventListener('submit', (event) => { event.preventDefault(); const prompt = elements.input.value.trim(); if (!prompt || state.loading) return; elements.input.value = ''; elements.input.style.height = 'auto'; createMessage('user', prompt); startRun(prompt); }); elements.input.addEventListener('input', () => { elements.input.style.height = 'auto'; elements.input.style.height = `${Math.min(160, elements.input.scrollHeight)}px`; }); elements.input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); elements.form.requestSubmit(); } }); elements.stop.addEventListener('click', stopRun); }
 
-function createMessage(role, content, isError = false) {
-  const article = document.createElement('article');
-  article.className = `message ${role}`;
-
-  const avatar = document.createElement('div');
-  avatar.className = 'avatar';
-  avatar.textContent = role === 'user' ? 'U' : 'A';
-
-  const bubble = document.createElement('div');
-  bubble.className = `bubble${isError ? ' error' : ''}`;
-  bubble.textContent = content;
-
-  if (role === 'user') {
-    article.append(bubble, avatar);
-  } else {
-    article.append(avatar, bubble);
-  }
-
-  elements.messages.appendChild(article);
-  elements.messages.scrollTop = elements.messages.scrollHeight;
-  return bubble;
-}
-
-function buildMessages(userInput) {
-  const systemPrompt = elements.systemPrompt.value.trim();
-  const recentMessages = state.messages.slice(-12);
-  return [
-    ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-    ...recentMessages,
-    { role: 'user', content: userInput },
-  ];
-}
-
-async function sendMessage(userInput) {
-  const config = presetOptions[state.preset];
-  const requestMessages = buildMessages(userInput);
-
-  state.messages.push({ role: 'user', content: userInput });
-  createMessage('user', userInput);
-  setLoading(true);
-  saveSettings();
-
-  try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        provider: elements.provider.value,
-        baseUrl: elements.baseUrl.value.trim(),
-        apiKey: elements.apiKey.value.trim(),
-        model: elements.model.value.trim(),
-        messages: requestMessages,
-        temperature: config.temperature,
-        maxTokens: config.maxTokens,
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || `请求失败：${response.status}`);
-    }
-
-    const content = data.content || '模型没有返回文本内容。';
-    state.messages.push({ role: 'assistant', content });
-    createMessage('assistant', content);
-
-    if (data.usage) {
-      elements.statusText.textContent = `完成 · prompt ${data.usage.prompt_tokens || 0} / completion ${data.usage.completion_tokens || 0}`;
-    }
-  } catch (error) {
-    createMessage('assistant', error instanceof Error ? error.message : '未知错误', true);
-    elements.statusText.textContent = '请求失败';
-  } finally {
-    setLoading(false);
-  }
-}
-
-elements.provider.addEventListener('change', () => {
-  const preset = providerPresets[elements.provider.value];
-  if (preset) {
-    elements.baseUrl.value = preset.baseUrl;
-    elements.model.value = preset.model;
-  }
-  updateSummary();
-  saveSettings();
-});
-
-['input', 'change'].forEach((eventName) => {
-  [elements.baseUrl, elements.apiKey, elements.model, elements.systemPrompt].forEach((element) => {
-    element.addEventListener(eventName, () => {
-      updateSummary();
-      saveSettings();
-    });
-  });
-});
-
-elements.presets.forEach((button) => {
-  button.addEventListener('click', () => {
-    state.preset = button.dataset.preset;
-    updatePresetButtons();
-    saveSettings();
-  });
-});
-
-elements.chatForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const userInput = elements.userInput.value.trim();
-  if (!userInput || state.isLoading) return;
-
-  elements.userInput.value = '';
-  sendMessage(userInput);
-});
-
-elements.userInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && event.ctrlKey) {
-    elements.chatForm.requestSubmit();
-  }
-});
-
-elements.clearChat.addEventListener('click', () => {
-  state.messages = [];
-  elements.messages.innerHTML = '';
-  createMessage('assistant', '对话已清空，可以开始新的验证。');
-});
-
-loadSettings();
+async function init() { const savedTheme = localStorage.getItem('aaagent.theme'); if (savedTheme) document.documentElement.dataset.theme = savedTheme; setSession(state.sessionId); setMode(state.mode); bind(); await loadProfiles(); }
+init();
